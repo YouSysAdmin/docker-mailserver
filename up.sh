@@ -9,7 +9,7 @@ if [ ! -f .env ]; then
 fi
 
 function prepare_dir() {
-  local dirs=("acme" "mailserver/config" "mailserver/config/ssl" "mailserver/data" "mailserver/logs" "mailserver/state" "roundcube/db" "roundcube/www" "traefik/logs")
+  local dirs=("acme" "mailserver/config" "mailserver/data" "mailserver/logs" "mailserver/state" "roundcube/db" "roundcube/www" "traefik/logs")
   for dir in "${dirs[@]}"; do
     mkdir -p "${data_dir}/${dir}"
   done

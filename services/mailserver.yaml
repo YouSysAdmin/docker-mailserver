@@ -39,44 +39,26 @@ volumes:
 # Services
 #######################################################################################################################
 services:
-  mailserver-certs:
-    image: ganeshpl/alpine-jq
-    restart: no
-    environment:
-      DOMAIN: ${DOMAIN}
-    depends_on:
-      - traefik
-    entrypoint: ['/prepare-certs.sh']
-    healthcheck:
-      test: [ "CMD", "ls", "/mailserver/ssl/cert.pem" ]
-      interval: 10s
-      timeout: 1s
-      retries: 5
-    volumes:
-      - ../scripts/prepare-certs.sh:/prepare-certs.sh
-      - mailserver-config:/mailserver
-      - acme:/acme
-
   mailserver:
     image: ghcr.io/docker-mailserver/docker-mailserver:latest
-    depends_on:
-      mailserver-certs:
-        condition: service_healthy
+    # hostname: ${DOMAIN}
     networks:
       - mailserver
     env_file: ../data/mailserver/mailserver.env
     environment:
+      # IMPORTANT! check openralay on an external IP!
+      PERMIT_DOCKER: connected-networks
       OVERRIDE_HOSTNAME: ${DOMAIN}
-      SSL_TYPE: manual
-      SSL_CERT_PATH: /tmp/docker-mailserver/ssl/cert.pem
-      SSL_KEY_PATH: /tmp/docker-mailserver/ssl/key.pem
+      SSL_TYPE: letsencrypt
+      SSL_DOMAIN: ${DOMAIN}
     ports:
-      - "25:25"    # SMTP  (explicit TLS => STARTTLS, Authentication is DISABLED => use port 465/587 instead)
-      - "143:143"  # IMAP4 (explicit TLS => STARTTLS)
-      - "465:465"  # ESMTP (implicit TLS)
-      - "587:587"  # ESMTP (explicit TLS => STARTTLS)
-      - "993:993"  # IMAP4 (implicit TLS)
+      - "${MAILSERVER_EXTERNAL_IP_25:-127.0.0.1}:25:25"     # SMTP  (explicit TLS => STARTTLS, Authentication is DISABLED => use port 465/587 instead)
+      - "${MAILSERVER_EXTERNAL_IP_143:-127.0.0.1}:143:143"  # IMAP4 (explicit TLS => STARTTLS)
+      - "${MAILSERVER_EXTERNAL_IP_465:-127.0.0.1}:465:465"  # ESMTP (implicit TLS)
+      - "${MAILSERVER_EXTERNAL_IP_587:-127.0.0.1}:587:587"  # ESMTP (explicit TLS => STARTTLS)
+      - "${MAILSERVER_EXTERNAL_IP_993:-127.0.0.1}:993:993"  # IMAP4 (implicit TLS)
     volumes:
+      - acme:/etc/letsencrypt
       - mailserver-data:/var/mail/
       - mailserver-state:/var/mail-state/
       - mailserver-logs:/var/log/mail/
@@ -84,10 +66,10 @@ services:
       - /etc/localtime:/etc/localtime:ro
     restart: always
     stop_grace_period: 1m
-    # Uncomment if using `ENABLE_FAIL2BAN=1`:
+    # Uncomment if using `ENABLE_FAIL2BAN=1`
     # cap_add:
     #   - NET_ADMIN
     healthcheck:
       test: "ss --listening --tcp | grep -P 'LISTEN.+:smtp' || exit 1"
       timeout: 3s
-      #retries: 0
+      # retries: 0

@@ -33,6 +33,7 @@ services:
     restart: unless-stopped
     networks:
       - roundcube-database
+      - mailserver
     volumes:
       - roundcube-database:/var/lib/postgresql/data
     env_file:

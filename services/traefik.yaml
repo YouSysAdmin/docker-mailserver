@@ -22,7 +22,7 @@ volumes:
 #######################################################################################################################
 services:
   traefik:
-    image: "traefik:v3.2.2"
+    image: "traefik:latest"
     container_name: "traefik"
     networks:
       - traefik
@@ -55,23 +55,21 @@ services:
       ### setup redirect to https
       - --entrypoints.web.http.redirections.entrypoint.to=websecure
       - --entryPoints.web.http.redirections.entrypoint.scheme=https
-      - --entrypoints.web-local.http.redirections.entrypoint.to=websecure-local
-      - --entryPoints.web-local.http.redirections.entrypoint.scheme=https
 
       # Default entrypoint
       - --entrypoints.websecure-local.asDefault=true
 
       # Certificate issuer config
       # Automatic Cloudflare DNS challenge
-      - --certificatesresolvers.letsencrypt.acme.dnschallenge=true
-      - --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare
+      # Uncomment if you want to use this mechanism
+      # - --certificatesresolvers.letsencrypt.acme.dnschallenge=true
+      # - --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare
+      # - --certificatesresolvers.letsencrypt.acme.email=${SSL_CERTIFICATE_EMAIL}
+      # - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+
       - --certificatesresolvers.letsencrypt.acme.email=${SSL_CERTIFICATE_EMAIL}
       - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
-
-      # Uncomment if you want to use http challenge
-#      - --certificatesresolvers.letsencrypt.acme.email=${SSL_CERTIFICATE_EMAIL}
-#      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
-#      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
 
     ports:
       - "${WEB_EXTERNAL_IP:-127.0.0.1}:${WEB_EXTERNAL_HTTP_PORT:-80}:80"
@@ -82,8 +80,8 @@ services:
       - ../data/traefik/traefik.env
 
     # Environments
-    environment:
-      CF_DNS_API_TOKEN: ${CLOUDFLARE_API_TOKEN:?cloudflare api token required}
+    # environment:
+    #    CF_DNS_API_TOKEN: $CF_DNS_API_TOKEN
 
     # Volumes
     volumes:
