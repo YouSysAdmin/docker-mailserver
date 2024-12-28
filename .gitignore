@@ -1,0 +1,7 @@
+# IDE's
+.idea
+.vscode
+
+# Devel dirs and files
+data
+.env

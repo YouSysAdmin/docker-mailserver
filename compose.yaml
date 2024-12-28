@@ -1,0 +1,13 @@
+---
+include:
+  - ./services/traefik.yaml
+  - ./services/roundcube.yaml
+  - ./services/mailserver.yaml
+
+volumes:
+  acme:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "data/acme"

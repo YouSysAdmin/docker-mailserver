@@ -1,0 +1,76 @@
+---
+#######################################################################################################################
+# Networks
+#######################################################################################################################
+networks:
+  roundcube:
+    name: roundcube
+  roundcube-database:
+    name: roundcube-database
+
+#######################################################################################################################
+# Volumes
+#######################################################################################################################
+volumes:
+  roundcube-database:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "../data/roundcube/db"
+  roundcube-www:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "../data/roundcube/www"
+#######################################################################################################################
+# Services
+#######################################################################################################################
+services:
+  roundcube-db:
+    image: postgres:latest
+    restart: unless-stopped
+    networks:
+      - roundcube-database
+    volumes:
+      - roundcube-database:/var/lib/postgresql/data
+    env_file:
+      - ../data/roundcube/roundcube.env
+    environment:
+      - POSTGRES_DB=${ROUNDCUBE_DB_NAME:-roundcube}
+      - POSTGRES_USER=${ROUNDCUBE_DB_USER:-roundcube}
+      - POSTGRES_PASSWORD=${ROUNDCUBE_DB_PASSWORD:-roundcube}
+
+  roundcubemail:
+    image: roundcube/roundcubemail:${ROUNDCUBE_VERSION:-latest}
+    volumes:
+      - roundcube-www:/var/www/html
+    networks:
+      - roundcube-database
+      - roundcube
+      - mailserver
+    environment:
+      - ROUNDCUBEMAIL_DB_TYPE=pgsql
+      - ROUNDCUBEMAIL_DB_HOST=roundcube-db
+      - ROUNDCUBEMAIL_DB_PORT=5432
+      - ROUNDCUBEMAIL_DB_NAME=${ROUNDCUBE_DB_NAME:-roundcube}
+      - ROUNDCUBEMAIL_DB_USER=${ROUNDCUBE_DB_USER:-roundcube}
+      - ROUNDCUBEMAIL_DB_PASSWORD=${ROUNDCUBE_DB_PASSWORD:-roundcube}
+      - ROUNDCUBEMAIL_SKIN=elastic
+      - ROUNDCUBEMAIL_DEFAULT_HOST=ssl://${DOMAIN}
+      - ROUNDCUBEMAIL_DEFAULT_PORT=993
+      - ROUNDCUBEMAIL_SMTP_SERVER=ssl://${DOMAIN}
+      - ROUNDCUBEMAIL_SMTP_PORT=465
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.roundcubemail.entrypoints=web"
+      - "traefik.http.routers.roundcubemail.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.middlewares.roundcubemail-https-redirect.redirectscheme.scheme=websecure"
+      - "traefik.http.routers.roundcubemail.middlewares=roundcubemail-https-redirect"
+      - "traefik.http.routers.roundcubemail-secure.entrypoints=websecure"
+      - "traefik.http.routers.roundcubemail-secure.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.roundcubemail-secure.tls=true"
+      - "traefik.http.routers.roundcubemail-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.roundcubemail-secure.service=roundcubemail"
+      - "traefik.http.services.roundcubemail.loadbalancer.server.port=80"

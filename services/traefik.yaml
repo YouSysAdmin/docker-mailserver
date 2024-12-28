@@ -1,0 +1,92 @@
+---
+#######################################################################################################################
+# Networks
+#######################################################################################################################
+networks:
+  traefik:
+    name: traefik
+
+#######################################################################################################################
+# Volumes
+#######################################################################################################################
+volumes:
+  traefik-logs:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "../data/traefik/logs"
+
+#######################################################################################################################
+# Services
+#######################################################################################################################
+services:
+  traefik:
+    image: "traefik:v3.2.2"
+    container_name: "traefik"
+    networks:
+      - traefik
+      - roundcube
+    command:
+      # General
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+
+      # Plugins
+      - --experimental.plugins.cloudflarewarp.modulename=github.com/BetterCorp/cloudflarewarp
+      - --experimental.plugins.cloudflarewarp.version=v1.3.3
+
+      # Logging
+      - --log.level=info
+      - --accesslog=${WEB_ACCESS_LOGS:-false}
+      - --accesslog.filepath=/var/log/traefik/access.log
+
+      # Traefik internal API
+      - --api.dashboard=true
+      - --api.insecure=false
+
+      # Default entrypoints
+      - --entryPoints.websecure.address=:443
+      - --entryPoints.websecure.reusePort=true
+
+      - --entryPoints.web.address=:80
+      - --entryPoints.web.reusePort=true
+
+      ### setup redirect to https
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entryPoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.web-local.http.redirections.entrypoint.to=websecure-local
+      - --entryPoints.web-local.http.redirections.entrypoint.scheme=https
+
+      # Default entrypoint
+      - --entrypoints.websecure-local.asDefault=true
+
+      # Certificate issuer config
+      # Automatic Cloudflare DNS challenge
+      - --certificatesresolvers.letsencrypt.acme.dnschallenge=true
+      - --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare
+      - --certificatesresolvers.letsencrypt.acme.email=${SSL_CERTIFICATE_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+
+      # Uncomment if you want to use http challenge
+#      - --certificatesresolvers.letsencrypt.acme.email=${SSL_CERTIFICATE_EMAIL}
+#      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+#      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+
+    ports:
+      - "${WEB_EXTERNAL_IP:-127.0.0.1}:${WEB_EXTERNAL_HTTP_PORT:-80}:80"
+      - "${WEB_EXTERNAL_IP:-127.0.0.1}:${WEB_EXTERNAL_HTTPS_PORT:-443}:443"
+
+    # Environment file:
+    env_file:
+      - ../data/traefik/traefik.env
+
+    # Environments
+    environment:
+      CF_DNS_API_TOKEN: ${CLOUDFLARE_API_TOKEN:?cloudflare api token required}
+
+    # Volumes
+    volumes:
+      - traefik-logs:/var/log/traefik
+      - acme:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock:ro

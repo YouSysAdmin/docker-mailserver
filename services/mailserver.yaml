@@ -1,0 +1,93 @@
+---
+#######################################################################################################################
+# Networks
+#######################################################################################################################
+networks:
+  mailserver:
+    name: mailserver
+
+#######################################################################################################################
+# Volumes
+#######################################################################################################################
+volumes:
+  mailserver-data:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "../data/mailserver/data"
+  mailserver-state:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "../data/mailserver/state"
+  mailserver-logs:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "../data/mailserver/logs"
+  mailserver-config:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "../data/mailserver/config"
+
+#######################################################################################################################
+# Services
+#######################################################################################################################
+services:
+  mailserver-certs:
+    image: ganeshpl/alpine-jq
+    restart: no
+    environment:
+      DOMAIN: ${DOMAIN}
+    depends_on:
+      - traefik
+    entrypoint: ['/prepare-certs.sh']
+    healthcheck:
+      test: [ "CMD", "ls", "/mailserver/ssl/cert.pem" ]
+      interval: 10s
+      timeout: 1s
+      retries: 5
+    volumes:
+      - ../scripts/prepare-certs.sh:/prepare-certs.sh
+      - mailserver-config:/mailserver
+      - acme:/acme
+
+  mailserver:
+    image: ghcr.io/docker-mailserver/docker-mailserver:latest
+    depends_on:
+      mailserver-certs:
+        condition: service_healthy
+    networks:
+      - mailserver
+    env_file: ../data/mailserver/mailserver.env
+    environment:
+      OVERRIDE_HOSTNAME: ${DOMAIN}
+      SSL_TYPE: manual
+      SSL_CERT_PATH: /tmp/docker-mailserver/ssl/cert.pem
+      SSL_KEY_PATH: /tmp/docker-mailserver/ssl/key.pem
+    ports:
+      - "25:25"    # SMTP  (explicit TLS => STARTTLS, Authentication is DISABLED => use port 465/587 instead)
+      - "143:143"  # IMAP4 (explicit TLS => STARTTLS)
+      - "465:465"  # ESMTP (implicit TLS)
+      - "587:587"  # ESMTP (explicit TLS => STARTTLS)
+      - "993:993"  # IMAP4 (implicit TLS)
+    volumes:
+      - mailserver-data:/var/mail/
+      - mailserver-state:/var/mail-state/
+      - mailserver-logs:/var/log/mail/
+      - mailserver-config:/tmp/docker-mailserver/
+      - /etc/localtime:/etc/localtime:ro
+    restart: always
+    stop_grace_period: 1m
+    # Uncomment if using `ENABLE_FAIL2BAN=1`:
+    # cap_add:
+    #   - NET_ADMIN
+    healthcheck:
+      test: "ss --listening --tcp | grep -P 'LISTEN.+:smtp' || exit 1"
+      timeout: 3s
+      #retries: 0
